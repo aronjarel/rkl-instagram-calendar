@@ -14,7 +14,7 @@ function saveRKLDecision(data) {
   const decision = String(data.decision || '');
   const name = String(data.name || '').trim().slice(0,120);
   const comments = String(data.comments || '').trim().slice(0,3000);
-  if (!/^RKL-\\d{3}$/.test(postId) || !['Approved','Rejected'].includes(decision) || !name || (decision === 'Rejected' && !comments)) throw new Error('Invalid review.');
+  if (!/^RKL-\d{3}$/.test(postId) || !['Approved','Rejected'].includes(decision) || !name || (decision === 'Rejected' && !comments)) throw new Error('Invalid review.');
   const rows = posts.getDataRange().getValues();
   const index = rows.findIndex((r,i) => i > 0 && r[0] === postId);
   if (index < 0) throw new Error('Unknown post ID.');
