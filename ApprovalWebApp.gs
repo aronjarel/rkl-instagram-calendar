@@ -1,8 +1,11 @@
 // RKL Approval Web App — paste into a new Apps Script file (ApprovalWebApp.gs).
 const RKL_SHEET_ID = '1qVU9dsdxm3HfgQT0LS5uee3NgaC0igihY_Jh2zvq7q8';
 function doGet(e) {
+  if (e && e.parameter && e.parameter.mode === 'status') {
+    return getRKLPublicStatuses(e);
+  }
   const post = String((e && e.parameter && e.parameter.post) || '');
-  const html = HtmlService.createHtmlOutput(`<!doctype html><html><head><base target="_top"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,sans-serif;padding:16px;color:#222}label{display:block;margin:12px 0 6px;font-weight:bold}textarea,input{width:100%;box-sizing:border-box;padding:9px;border:1px solid #aaa;border-radius:5px}textarea{min-height:95px}button{padding:12px;border:0;border-radius:6px;margin:12px 8px 0 0;cursor:pointer;font-weight:bold}.approve{background:#276842;color:white}.reject{background:#a72b32;color:white}.note{font-size:12px;color:#555}#message{margin-top:15px}</style></head><body><h3>Chapter content review</h3><label for="post">Post ID</label><input id="post" readonly><label for="name">Reviewer name</label><input id="name" placeholder="Your name" required><label for="comments">Comments (required for rejection)</label><textarea id="comments" placeholder="Feedback for the content team"></textarea><div><button class="approve" onclick="submitDecision('Approved')">Approve</button><button class="reject" onclick="submitDecision('Rejected')">Reject</button></div><div id="message" role="status"></div><p class="note">Submissions are saved to the RKL approval tracker.</p><script>document.getElementById('post').value=${JSON.stringify(post)};function submitDecision(decision){const postId=document.getElementById('post').value,name=document.getElementById('name').value.trim(),comments=document.getElementById('comments').value.trim(),msg=document.getElementById('message');if(!name){msg.textContent='Enter your name.';return}if(decision==='Rejected'&&!comments){msg.textContent='Please explain the rejection.';return}msg.textContent='Saving…';google.script.run.withSuccessHandler(()=>{msg.textContent=decision+' recorded successfully.'}).withFailureHandler(e=>{msg.textContent='Could not save: '+e.message}).saveRKLDecision({postId,name,comments,decision})}</script></body></html>`);
+  const html = HtmlService.createHtmlOutput(`<!doctype html><html><head><base target="_top"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,sans-serif;padding:16px;color:#222}label{display:block;margin:12px 0 6px;font-weight:bold}textarea,input{width:100%;box-sizing:border-box;padding:9px;border:1px solid #aaa;border-radius:5px}textarea{min-height:95px}button{padding:12px;border:0;border-radius:6px;margin:12px 8px 0 0;cursor:pointer;font-weight:bold}.approve{background:#276842;color:white}.reject{background:#a72b32;color:white}.note{font-size:12px;color:#555}#message{margin-top:15px}</style></head><body><h3>Chapter content review</h3><label for="post">Post ID</label><input id="post" readonly><label for="name">Reviewer name</label><input id="name" placeholder="Your name" required><label for="comments">Comments (required for rejection)</label><textarea id="comments" placeholder="Feedback for the content team"></textarea><div><button class="approve" onclick="submitDecision('Approved')">Approve</button><button class="reject" onclick="submitDecision('Rejected')">Reject</button></div><div id="message" role="status"></div><p class="note">Submissions are saved to the RKL approval tracker.</p><script>document.getElementById('post').value=${JSON.stringify(post)};function submitDecision(decision){const postId=document.getElementById('post').value,name=document.getElementById('name').value.trim(),comments=document.getElementById('comments').value.trim(),msg=document.getElementById('message');if(!name){msg.textContent='Enter your name.';return}if(decision==='Rejected'&&!comments){msg.textContent='Please explain the rejection.';return}msg.textContent='Saving…';google.script.run.withSuccessHandler(()=>{msg.textContent=decision+' recorded successfully.';window.parent.postMessage({type:'rkl-review-saved'},'*')}).withFailureHandler(e=>{msg.textContent='Could not save: '+e.message}).saveRKLDecision({postId,name,comments,decision})}</script></body></html>`);
   return html.setTitle('RKL Content Review').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 function saveRKLDecision(data) {
@@ -29,4 +32,24 @@ function saveRKLDecision(data) {
     else status.appendRow([postId,rows[index][2],decision,now,name]);
   } finally {lock.releaseLock()}
   return {ok:true};
+}
+
+// Public status endpoint: ONLY post IDs and decisions, no reviewer details.
+function getRKLPublicStatuses(e) {
+  const callback = String((e.parameter || {}).callback || 'RKLStatusReceive');
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]{0,60}$/.test(callback)) {
+    return ContentService.createTextOutput('Invalid callback');
+  }
+  const sheet = SpreadsheetApp.openById(RKL_SHEET_ID).getSheetByName('Posts');
+  const rows = sheet.getDataRange().getValues();
+  const statuses = {};
+  rows.slice(1).forEach(row => {
+    const id = String(row[0] || '');
+    if (/^RKL-\\d{3}$/.test(id)) {
+      const value = String(row[7] || 'Pending');
+      statuses[id] = ['Approved','Rejected','Pending','Changes Requested'].includes(value) ? value : 'Pending';
+    }
+  });
+  return ContentService.createTextOutput(callback + '(' + JSON.stringify(statuses) + ');')
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
