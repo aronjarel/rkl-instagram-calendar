@@ -45,7 +45,7 @@ function getRKLPublicStatuses(e) {
   const statuses = {};
   rows.slice(1).forEach(row => {
     const id = String(row[0] || '');
-    if (/^RKL-\\d{3}$/.test(id)) {
+    if (/^RKL-\d{3}$/.test(id)) {
       const value = String(row[7] || 'Pending');
       statuses[id] = ['Approved','Rejected','Pending','Changes Requested'].includes(value) ? value : 'Pending';
     }
